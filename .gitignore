@@ -4,3 +4,5 @@ venv/
 dist/
 *.pb
 downloads/
+
+.DS_Store
