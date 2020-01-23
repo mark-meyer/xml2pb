@@ -10,7 +10,7 @@ Install dependencies:
 pip3 install -r requirements.txt
 ``` 
 
-Setup configuration in `config.py`
+Copy configuration in `config-orig.py` to config.py and add customization.
 
 ### Running
 Start the script with
