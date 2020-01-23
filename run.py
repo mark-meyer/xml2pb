@@ -1,4 +1,3 @@
-import os
 import logging
 import argparse
 import xml.etree.ElementTree as ET
@@ -8,6 +7,7 @@ from gtfsSQL import gtfs2sql
 import time
 from config import XML_URL, OUTPUT_FILE, DELAY, GTFS_URL, GTFS_PATH
 from getGTFS import getNewGTFS
+from atomicwrites import atomic_write
 
 # === Get logging level if set ===#
 parser = argparse.ArgumentParser(description="Starts the realtime protobuffer generator")
@@ -121,9 +121,12 @@ def run():
     trips = makeTripDelaysFromXML(realtime_data)
     pb = makeProtoBuffer(trips)
 
-    with open('tmpFile.pb', 'wb') as pb_file:
-        pb_file.write(pb.SerializeToString())
-    os.replace('tmpFile.pb', OUTPUT_FILE)
+    try:
+        with atomic_write(OUTPUT_FILE, overwrite=True, mode='wb') as pb_file:
+            pb_file.write(pb.SerializeToString())
+    except OSError as os_error:
+        logging.error(os_error)
+        return
 
     logging.debug("Wrote Realtime Protobuffer file")
 
