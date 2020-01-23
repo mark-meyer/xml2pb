@@ -111,7 +111,7 @@ def makeProtoBuffer(trips):
 def run():
     try:
         realtime_data = requestStopXML(XML_URL)
-    except urllib.error.URLError as request_error:
+    except (urllib.error.URLError, ConnectionError) as request_error:
         logging.error(request_error)
         return
     except ET.ParseError as xml_error:
