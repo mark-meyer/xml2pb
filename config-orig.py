@@ -1,8 +1,8 @@
 # The URL hosting the muni stopdepartures XML file
-XML_URL = "http://bustracker.muni.org/InfoPoint/XML/stopdepartures.xml"
+XML_URL = "http://example.com/stopdepartures.xml"
 
 # The url where the GTFS zip file is available:
-GTFS_URL = "http://gtfs.muni.org/People_Mover_2019.12.17.gtfs.zip"
+GTFS_URL = "http://example.com/transite.gtfs"
 
 # Where to save the protobuffer file
 OUTPUT_FILE = "people_mover.pb"
