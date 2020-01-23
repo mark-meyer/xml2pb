@@ -1,4 +1,4 @@
-# xmls2pr 
+# xmls2pb 
 Scripts to transform realtime xml data into google protobuf format
 
 ### Requirements
