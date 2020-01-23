@@ -1,3 +1,4 @@
+import os
 import logging
 import argparse
 import xml.etree.ElementTree as ET
@@ -127,6 +128,7 @@ def run():
     except OSError as os_error:
         logging.error(os_error)
         return
+    os.chmod(OUTPUT_FILE, 644)
 
     logging.debug("Wrote Realtime Protobuffer file")
 
