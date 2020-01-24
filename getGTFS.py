@@ -13,20 +13,12 @@ from io import BytesIO
 import urllib.request
 import zipfile
 import logging
-import os
-import shutil
-from pathlib import Path
-
 from gtfsSQL import gtfs2sql
 from config import GTFS_URL, GTFS_PATH
-
-TEMP_FILE = '_tmpGTFS'
 
 
 def getNewGTFS(gtfs_url, destination):
     ''' Download GTFS from gtfs_url and unpack into destination'''
-    # in case it was orphaned:
-    shutil.rmtree(TEMP_FILE, ignore_errors=True)
 
     logging.debug("Downloading GTFS")
 
@@ -38,19 +30,10 @@ def getNewGTFS(gtfs_url, destination):
         return
     try:
         zipFile = zipfile.ZipFile(BytesIO(zipData))
-        zipFile.extractall(path=TEMP_FILE)
+        zipFile.extractall(path=destination)
     except zipfile.error as zip_err:
         logging.error(zip_err)
         return
-
-    # ensure that the destination directory exists.
-    parent, f = os.path.split(destination)
-    if parent:
-        p = Path(parent)
-        p.mkdir(parents=True, exist_ok=True)
-
-    shutil.rmtree(destination, ignore_errors=True)
-    os.rename(TEMP_FILE, destination)
 
 
 if __name__ == "__main__":
