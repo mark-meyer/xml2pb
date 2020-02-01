@@ -6,7 +6,8 @@ import urllib.request
 from google.transit import gtfs_realtime_pb2
 from gtfsSQL import gtfs2sql
 import time
-from config import XML_URL, OUTPUT_FILE, DELAY, GTFS_URL, GTFS_PATH
+import pendulum
+from config import XML_URL, OUTPUT_FILE, DELAY, GTFS_URL, GTFS_PATH, TZ
 from getGTFS import getNewGTFS
 from atomicwrites import atomic_write
 
@@ -41,8 +42,9 @@ def requestStopXML(xml_url):
 def makeTripDelaysFromXML(realTimeElTree):
     '''
     Converts the XML tree from stopdepartures into an object keyed by trip_id
-    The object will only have a single event per id, and will choose the one with
-    the lowest stop sequence, which should be the earliest reported stop on the trip.
+    The object will only have a single event per id, and will choose the one
+    with the lowest stop sequence, which should be the earliest reported stop
+    on the trip.
     '''
     trip_delays = {}
 
@@ -59,10 +61,18 @@ def makeTripDelaysFromXML(realTimeElTree):
             if (sdt == "Done" or dev == '0'):
                 continue
 
-            # getTripFromXMLData makes a guess about the trip id and stop sequence based
-            # the information in the XML
+            # getTripFromXMLData makes a guess about the trip id and stop
+            # sequence based the information in the XML
 
-            t = gtfs2sql.getTripFromXMLData(stop_id, route_id, sdt + ":00", direction, "Thursday")
+            today = pendulum.today(TZ).format('dddd').lower()
+
+            t = gtfs2sql.getTripFromXMLData(
+                stop_id,
+                route_id,
+                sdt + ":00",
+                direction,
+                today
+            )
 
             if t is None:
                 continue

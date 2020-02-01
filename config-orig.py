@@ -12,3 +12,6 @@ DELAY = 20  # seconds
 
 # Path to the directory hosting the uncompressed GTFS files
 GTFS_PATH = "downloads/People_Mover.gtfs"
+
+# Local Time Zone
+TZ = "America/Anchorage"
