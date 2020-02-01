@@ -69,7 +69,6 @@ directionLookup = {
 
 def getTripFromXMLData(bt_id, route_id, sdt, direction, day):
     '''Finds the (hopefully) uniques trip given the information we have in the XML'''
-    day = datetime.now().strftime("%A")
 
     with sqlite3.connect(DB_FILE) as con:
         con.row_factory = sqlite3.Row
