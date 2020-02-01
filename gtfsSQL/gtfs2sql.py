@@ -1,6 +1,5 @@
 import sqlite3
 import csv
-from datetime import datetime
 from config import GTFS_PATH
 import os
 import logging
