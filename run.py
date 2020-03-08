@@ -7,9 +7,10 @@ from google.transit import gtfs_realtime_pb2
 from gtfsSQL import gtfs2sql
 import time
 import pendulum
-from config import XML_URL, OUTPUT_FILE, DELAY, GTFS_URL, GTFS_PATH, TZ
+from config import XML_DEPARTURES_URL, XML_VEHICLES_URL, OUTPUT_FILE, DELAY, GTFS_URL, GTFS_PATH, TZ
 from getGTFS import getNewGTFS
 from atomicwrites import atomic_write
+from concurrent import futures 
 
 # === Get logging level if set ===#
 parser = argparse.ArgumentParser(description="Starts the realtime protobuffer generator")
@@ -36,12 +37,61 @@ def requestStopXML(xml_url):
     ''' Grab the XML, parse it into an Element Tree and return the root'''
     with urllib.request.urlopen(xml_url) as response:
         xml = response.read()
+        logging.debug(f"Downloaded xml: {xml_url}")
         return ET.fromstring(xml)
 
+def inservice(vehicle):
+   ''' Returns true if the vehicle is considered in servive '''
+   return vehicle.attrib['op-status'] not in ['none', 'out-of-service']
+
+def makeLocationsFromVehicleXML(locationElTree):
+    '''
+    Converts the vehicle locations xml tree from vehiclelocation to a dictionary
+    keyed by vehicle id (the name tag in the xml). This looks up the trip id based
+    on the XML's tripid, which is based on the time of the first departure of a particular
+    route. For example tripid 1150 corresponds to the trip whose first departure 
+    is at 11:50:00. Combined with route, direction, and day, this is enough to 
+    unambiguously determine the trip
+    '''
+    
+    today = pendulum.today(TZ).format('dddd').lower()
+    
+    vehicles = {}
+
+    for vehicle in filter(inservice, locationElTree.iter('vehicle')):
+        routeid = vehicle.find('routeid').text
+        # route 99 is a Deadhead route. It appears to be used for vehicles
+        # moving to the garage or otherwise not in service
+        if routeid == '99':
+            continue
+        name = vehicle.find('name').text
+        tripid = vehicle.find('tripid').text
+        laststop = vehicle.find('laststop').text
+        direction = vehicle.find('direction').text
+        speed = float(vehicle.find('speed').text)
+        position = {
+            'latitude': float(vehicle.find('latitude').text),
+            'longitude': float(vehicle.find('longitude').text),
+            'bearing': float(vehicle.find('heading').text),
+            'speed': speed * 0.44704 # mph to meters/second
+        }
+          
+        tripGuess = gtfs2sql.getTripFromLocationData(tripid, routeid, direction, today)
+        if (tripGuess is None):
+            logging.debug(f"Couldn't determine trip id from {tripid}, {routeid}, {direction}, {today}")
+            continue 
+        tripId = tripGuess['trip_id']
+        
+        vehicles[name] = {
+            "position": position,
+            "trip": {"trip_id":tripId}
+        }
+        
+    return vehicles
 
 def makeTripDelaysFromXML(realTimeElTree):
     '''
-    Converts the XML tree from stopdepartures into an object keyed by trip_id
+    Converts the XML tree from stopdepartures into an dictionary keyed by trip_id
     The object will only have a single event per id, and will choose the one
     with the lowest stop sequence, which should be the earliest reported stop
     on the trip.
@@ -61,12 +111,12 @@ def makeTripDelaysFromXML(realTimeElTree):
             if (sdt == "Done" or dev == '0'):
                 continue
 
-            # getTripFromXMLData makes a guess about the trip id and stop
+            # getTripFromDepartureData makes a guess about the trip id and stop
             # sequence based the information in the XML
 
             today = pendulum.today(TZ).format('dddd').lower()
 
-            t = gtfs2sql.getTripFromXMLData(
+            t = gtfs2sql.getTripFromDepartureData(
                 stop_id,
                 route_id,
                 sdt + ":00",
@@ -89,7 +139,7 @@ def makeTripDelaysFromXML(realTimeElTree):
     return trip_delays
 
 
-def makeProtoBuffer(trips):
+def makeProtoBuffer(trips, locations):
     '''
     Create a protobuffer object from the trips object.
     Trips is expected to be a dictionary keyed to trip_id strings.
@@ -102,7 +152,7 @@ def makeProtoBuffer(trips):
     feed.header.incrementality = 0
     feed.header.timestamp = int(time.time())
 
-    # Create an entity for each trip
+    # Create an trip update entity for each trip
     for trip_id, trip in trips.items():
         entity = gtfs_realtime_pb2.FeedEntity()
         entity.id = trip_id
@@ -115,13 +165,26 @@ def makeProtoBuffer(trips):
 
         entity.trip_update.stop_time_update.append(stop_time_update)
         feed.entity.append(entity)
-
+    # Create vehicle location for each vehicle location
+    for vehicle_id, info in locations.items():
+        entity = gtfs_realtime_pb2.FeedEntity()
+        entity.id = vehicle_id
+        entity.vehicle.trip.trip_id = info['trip']['trip_id']
+        entity.vehicle.vehicle.id = vehicle_id
+        entity.vehicle.position.latitude = info['position']['latitude']
+        entity.vehicle.position.longitude = info['position']['longitude']
+        entity.vehicle.position.bearing = info['position']['bearing']
+        entity.vehicle.position.speed = info['position']['speed']
+        feed.entity.append(entity)
     return feed
 
 
 def run():
+    with futures.ThreadPoolExecutor(2) as executor:
+      res = executor.map(requestStopXML, [XML_DEPARTURES_URL, XML_VEHICLES_URL])
+
     try:
-        realtime_data = requestStopXML(XML_URL)
+        realtime_data, position_data =  list(res)
     except (urllib.error.URLError, ConnectionError) as request_error:
         logging.error(request_error)
         return
@@ -130,7 +193,9 @@ def run():
         return
 
     trips = makeTripDelaysFromXML(realtime_data)
-    pb = makeProtoBuffer(trips)
+    locations = makeLocationsFromVehicleXML(position_data)
+
+    pb = makeProtoBuffer(trips, locations)
 
     try:
         with atomic_write(OUTPUT_FILE, overwrite=True, mode='wb') as pb_file:
@@ -144,7 +209,7 @@ def run():
 
 
 if __name__ == "__main__":
-    getNewGTFS(GTFS_URL, GTFS_PATH)
+    #getNewGTFS(GTFS_URL, GTFS_PATH)
     gtfs2sql.initializeGTFS()
 
     while True:

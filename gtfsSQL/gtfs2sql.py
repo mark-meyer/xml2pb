@@ -66,8 +66,8 @@ directionLookup = {
 }
 
 
-def getTripFromXMLData(bt_id, route_id, sdt, direction, day):
-    '''Finds the (hopefully) uniques trip given the information we have in the XML'''
+def getTripFromDepartureData(bt_id, route_id, sdt, direction, day):
+    '''Finds the (hopefully) uniques trip given the information we have in the departures XML'''
 
     with sqlite3.connect(DB_FILE) as con:
         con.row_factory = sqlite3.Row
@@ -87,12 +87,35 @@ def getTripFromXMLData(bt_id, route_id, sdt, direction, day):
         ''', (route_id, directionLookup[direction], sdt, bt_id))
         res = c.fetchone()
         if res:
-            d = dict(res)
+            return dict(res)
         else:
-            d = None
+            return None
 
-    return d
 
+def getTripFromLocationData(xml_tripID, routeid, direction, day):
+   '''Find the trip id and other data give the info available in the vehicle location XML'''
+   with sqlite3.connect(DB_FILE) as con:
+      con.row_factory = sqlite3.Row
+      c = con.cursor()
+
+      c.execute(f'''
+         SELECT trips.trip_id, routes.route_id 
+         FROM stop_times, routes
+         JOIN trips on stop_times.trip_id = trips.trip_id
+         JOIN calendar ON calendar.service_id = trips.service_id
+         WHERE SUBSTR(REPLACE(arrival_time, ':', ''),1, 4) = SUBSTR('0' + ? , -4)
+         AND trips.route_id = routes.route_id
+         AND stop_sequence = 1
+         AND routes.route_short_name = ?
+         AND trips.trip_headsign = ? 
+         AND calendar.{day}
+         ''', (xml_tripID, routeid, directionLookup[direction]))
+        
+      res = c.fetchone()
+      if (res):
+         return dict(res)
+      else:
+         return None
 
 if __name__ == "__main__":
     initializeGTFS()
