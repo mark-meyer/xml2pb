@@ -1,6 +1,5 @@
 import sqlite3
 import csv
-from config import GTFS_PATH
 import os
 import logging
 
@@ -32,15 +31,6 @@ def createTables():
     con.close()
 
 
-def importGTFS():
-    '''Imports the gtfs files into the DB'''
-    with sqlite3.connect(DB_FILE) as con:
-        for table in GTFS_TABLES:
-            logger.debug(f"importing {table}")
-            importFile(f'{GTFS_PATH}/{table}.txt', table, con)
-        con.commit()
-
-
 def importFile(path, table, con):
     '''Reads a single GTFS file at `path` and inserts it into `table`'''
     with open(path) as f:
@@ -49,9 +39,18 @@ def importFile(path, table, con):
         con.executemany(f'INSERT into {table} VALUES ({placeholders})', dr)
 
 
-def initializeGTFS():
+def importGTFS(gtfs_path):
+    '''Imports the gtfs files into the DB'''
+    with sqlite3.connect(DB_FILE) as con:
+        for table in GTFS_TABLES:
+            logger.debug(f"importing {table}")
+            importFile(f'{gtfs_path}/{table}.txt', table, con)
+        con.commit()
+
+
+def initializeGTFS(gtfs_path):
     createTables()
-    importGTFS()
+    importGTFS(gtfs_path)
 
 
 # These strings are in the headsign field of trips
@@ -93,29 +92,30 @@ def getTripFromDepartureData(bt_id, route_id, sdt, direction, day):
 
 
 def getTripFromLocationData(xml_tripID, routeid, direction, day):
-   '''Find the trip id and other data give the info available in the vehicle location XML'''
-   with sqlite3.connect(DB_FILE) as con:
-      con.row_factory = sqlite3.Row
-      c = con.cursor()
+    '''Find the trip id and other data give the info available in the vehicle location XML'''
+    with sqlite3.connect(DB_FILE) as con:
+        con.row_factory = sqlite3.Row
+        c = con.cursor()
 
-      c.execute(f'''
-         SELECT trips.trip_id, routes.route_id 
-         FROM stop_times, routes
-         JOIN trips on stop_times.trip_id = trips.trip_id
-         JOIN calendar ON calendar.service_id = trips.service_id
-         WHERE SUBSTR(REPLACE(arrival_time, ':', ''),1, 4) = SUBSTR('0' + ? , -4)
-         AND trips.route_id = routes.route_id
-         AND stop_sequence = 1
-         AND routes.route_short_name = ?
-         AND trips.trip_headsign = ? 
-         AND calendar.{day}
-         ''', (xml_tripID, routeid, directionLookup[direction]))
-        
-      res = c.fetchone()
-      if (res):
-         return dict(res)
-      else:
-         return None
+        c.execute(f'''
+            SELECT trips.trip_id, routes.route_id
+            FROM stop_times, routes
+            JOIN trips on stop_times.trip_id = trips.trip_id
+            JOIN calendar ON calendar.service_id = trips.service_id
+            WHERE SUBSTR(REPLACE(arrival_time, ':', ''),1, 4) = SUBSTR('0' || ? , -4)
+            AND trips.route_id = routes.route_id
+            AND stop_sequence = 1
+            AND routes.route_short_name = ?
+            AND trips.trip_headsign = ?
+            AND calendar.{day}
+            ''', (xml_tripID, routeid, directionLookup[direction]))
+
+    res = c.fetchone()
+    if (res):
+        return dict(res)
+    else:
+        return None
+
 
 if __name__ == "__main__":
     initializeGTFS()

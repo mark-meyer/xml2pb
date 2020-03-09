@@ -1,5 +1,5 @@
 __pycache__/
-gtfsSQL/db/gtfs_db
+xml2pb/gtfsSQL/db/gtfs_db
 venv/
 dist/
 *.pb

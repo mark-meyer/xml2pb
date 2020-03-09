@@ -13,7 +13,7 @@ from io import BytesIO
 import urllib.request
 import zipfile
 import logging
-from gtfsSQL import gtfs2sql
+from xml2pb.gtfsSQL import gtfs2sql
 from config import GTFS_URL, GTFS_PATH
 
 
