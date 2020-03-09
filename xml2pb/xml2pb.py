@@ -24,6 +24,9 @@ def makeLocationsFromVehicleXML(locationElTree):
     today = pendulum.today(TZ).format('dddd').lower()
 
     vehicles = {}
+    # time is formated like: 2020-03-09 11:18
+    xmlTimeStamp = locationElTree.find('report-generated').text
+    timeStamp = pendulum.parse(xmlTimeStamp, tz=TZ).int_timestamp
 
     for vehicle in filter(inservice, locationElTree.iter('vehicle')):
         routeid = vehicle.find('routeid').text
@@ -50,6 +53,7 @@ def makeLocationsFromVehicleXML(locationElTree):
         tripId = tripGuess['trip_id']
 
         vehicles[name] = {
+            "timestamp": timeStamp,
             "position": position,
             "trip": {"trip_id": tripId}
         }
@@ -137,6 +141,7 @@ def makeProtoBuffer(trips, locations):
     for vehicle_id, info in locations.items():
         entity = gtfs_realtime_pb2.FeedEntity()
         entity.id = vehicle_id
+        entity.vehicle.timestamp = info['timestamp']
         entity.vehicle.trip.trip_id = info['trip']['trip_id']
         entity.vehicle.vehicle.id = vehicle_id
         entity.vehicle.position.latitude = info['position']['latitude']
